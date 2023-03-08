@@ -1,9 +1,3 @@
-#AnalyzerBot is created by Michael Speer
-#This is super rough, about half is leftover code from one of the recommended framework for Telegram
-#The idea for this project is to host this bot on a RaspberryPi and analyze the data
-#The end goal is a predictive model that can guess whether or not we will have a "high traffic day"
-#A machine learning mechanism might be put in place later in my education but this is done in my time off so that might not materialize.
-
 from time import sleep
 from origamibot import OrigamiBot as Bot
 from origamibot.listener import Listener
@@ -27,34 +21,13 @@ class BotsCommands:
             message.chat.id,
             'Hello user!\nThis is an example bot.')
 
-    def add(self, message, a: float, b: float):  # /add [a: float] [b: float]
-        self.bot.send_message(
-            message.chat.id,
-            str(a + b)
-            )
-
-    def _not_a_command(self):   # This method not considered a command
-        print('I am not a command')
-
-
-class MessageListener(Listener):  # Event listener must inherit Listener
-    def __init__(self, bot):
-        self.bot = bot
-        self.m_count = 0
-
-    def my_echo(self, message):
-        value = message.text.replace('/echo ','')
-        self.bot.send_message(message.chat.id, value)
-
-    def on_message(self, message):   # called on every message
-        self.m_count += 1
-        print(message)
+    def record(self, message):
+        """This method handles all recording of data into longterm storage"""
         with open('raw.tsv', 'a+') as raw:
             try:
                 raw.writelines(str(str(message).encode(encoding='utf8', errors= 'xmlcharrefreplace'))+'\n')
             except Exception as e: 
                 raw.writelines(str(e)+'\n')
-
 
         if message.text != None:
             if message.chat.id in approved_array:
@@ -68,30 +41,6 @@ class MessageListener(Listener):  # Event listener must inherit Listener
                     except:
                         csvwriter.writerow([message.message_id,message.date,time.time(),(message.chat.id),(message.chat.type),message.from_user.id, cleanstring.encode(encoding='utf8', errors= 'xmlcharrefreplace')])
                 #print("success")
-
-##OptIn and OptOut aren't working exactly right but I don't have time to fix it currently.
-            if '/optin' in message.text.lower():
-                if message.chat.id in approved_array:
-                    self.bot.send_message(message.chat.id, 'You have already opted into having mesasges recorded. To opt out, try /OptOut')
-                else:
-                    approved_array.append(message.chat.id)
-                    self.bot.send_message(message.chat.id, 'You have successfully opted in. This bot will now begin recording your messages and pertinent metadata. This data will be stored securely and will not be released for any reason.')
-                    with open(filename2, 'a+') as csvarray:
-                        arraywriter = csv.writer(csvarray)
-                        arraywriter.writerow(approved_array)
-
-            if '/optout' in message.text.lower():
-                if message.chat.id in approved_array:
-                    approved_array.remove(message.chat.id)
-                    self.bot.send_message(message.chat.id, 'You have successfully opted out, this bot will no longer record messages until someone opts in. Thank you.')
-                    with open(filename2, 'w') as csvarray:
-                        arraywriter = csv.writer(csvarray)
-                        arraywriter.writerow(approved_array)
-                else:
-                    self.bot.send_message(message.chat.id, 'This chat was not found as having opted in. This bot is not recording your messages.')
-
-            if '/echo' in message.text:
-                self.my_echo(message)
         elif message.animation != None:
             with open(filename, 'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
@@ -108,6 +57,49 @@ class MessageListener(Listener):  # Event listener must inherit Listener
             with open(filename, 'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerow([message.message_id,message.date,time.time(),(message.chat.id),(message.chat.type),message.from_user.id, "Message Type: Unknown"])
+
+    def opt_check(self, message):
+        ##OptIn and OptOut aren't working exactly right but I don't have time to fix it currently.
+        if '/optin' in message.text.lower():
+            if message.chat.id in approved_array:
+                self.bot.send_message(message.chat.id, 'You have already opted into having mesasges recorded. To opt out, try /OptOut')
+            else:
+                approved_array.append(message.chat.id)
+                self.bot.send_message(message.chat.id, 'You have successfully opted in. This bot will now begin recording your messages and pertinent metadata. This data will be stored securely and will not be released for any reason.')
+                with open(filename2, 'w+') as csvarray:
+                    arraywriter = csv.writer(csvarray)
+                    arraywriter.writerow(approved_array)
+
+        if '/optout' in message.text.lower():
+            if message.chat.id in approved_array:
+                approved_array.remove(message.chat.id)
+                self.bot.send_message(message.chat.id, 'You have successfully opted out, this bot will no longer record messages until someone opts in. Thank you.')
+                with open(filename2, 'w') as csvarray:
+                    arraywriter = csv.writer(csvarray)
+                    arraywriter.writerow(approved_array)
+            else:
+                self.bot.send_message(message.chat.id, 'This chat was not found as having opted in. This bot is not recording your messages.')
+        
+
+
+
+class MessageListener(Listener):  # Event listener must inherit Listener
+    def __init__(self, bot):
+        self.bot = bot
+        self.m_count = 0
+
+    def my_echo(self, message):
+        value = message.text.replace('/echo ','')
+        self.bot.send_message(message.chat.id, value)
+
+    def on_message(self, message):   # called on every message
+        self.m_count += 1
+        print(message)
+        BotsCommands.record(self, message)
+        BotsCommands.opt_check(self, message)
+
+        if '/echo' in message.text:
+            self.my_echo(message)
 
     def on_command_failure(self, message, err=None):  # When command fails
         if err is None:
